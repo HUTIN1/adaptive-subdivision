@@ -5,6 +5,7 @@
 //  Created by S WEI on 16/7/20.
 //  Copyright © 2016年 S WEI. All rights reserved.
 //
+// #include <CGAL/Polygon_mesh_processing/IO/polygon_mesh_io.h>
 
 
 #include "Window.hpp"
@@ -12,6 +13,8 @@
 #include "Sqrt_3.hpp"
 #include <unistd.h>
 #include <limits>
+
+namespace PMP = CGAL::Polygon_mesh_processing;
 
 void usage()
 {
@@ -70,65 +73,40 @@ int convertInt(const std::string& arg)
 
 //Process function for computation and rendering 
 template<class T>
-void process(T& mesh, Window& window, const double& angle, bool adaptive, const int& maxLevel, const int& maxFaces)
+void process(T& mesh, const double& angle, bool adaptive, const int& maxLevel, const int& maxFaces, std::string inputFilename, std::string outputFilename)
 {
+    
     std::cout<<"Precomputing...\n";
-    mesh.loadMesh();
+    mesh.loadMesh(inputFilename);
+    
     mesh.setCriteria(angle);
     if(adaptive)
         mesh.enableAdaptive();
     
-    std::vector<double> vbuffer;
-    std::vector<double> nbuffer;
-    std::vector<double> ebuffer;
-    
-    mesh.createBuffers(vbuffer,nbuffer,ebuffer);
-    std::unique_ptr<Shader> shader=std::make_unique<Shader>();
-    //Initialize shader
-    shader->init();
-    //Initialize data buffer
-    shader->bindBuffers(vbuffer, nbuffer, ebuffer);
-    //Set shader attribute
-    shader->setAttribute();
-    shader->setSize(vbuffer.size()/3);
+
     
     int Level = 0;
-    //Add to window
-    window.add(shader,mesh.size_of_faces(),mesh.size_of_vertices());
+
     
-    //Clear buffer for next iteration
-    vbuffer.clear();
-    nbuffer.clear();
-    ebuffer.clear();
-    
+    std::cout << "Start Loop" << std::endl;
     while(mesh.size_of_faces()<maxFaces && Level < maxLevel)
     {
+        std::cout << "Curent Level : " << Level << std::endl;
         std::size_t before=mesh.size_of_faces();
 
         mesh.execution();
         ++Level;
-        
-        mesh.createBuffers(vbuffer,nbuffer,ebuffer);
-        
-        shader=std::make_unique<Shader>();
-        shader->init();
-        shader->bindBuffers(vbuffer, nbuffer, ebuffer);
-        shader->setAttribute();
-        shader->setSize(vbuffer.size()/3);
-        
-        window.add(shader,mesh.size_of_faces(),mesh.size_of_vertices());
-        
-        vbuffer.clear();
-        nbuffer.clear();
-        ebuffer.clear();
+    
+
         
         double rise =static_cast<double>(mesh.size_of_faces()-before)/static_cast<double>(mesh.size_of_faces());
        
-        if(rise<0.01){
+        if(rise<0.0001){
             break;
         }
     }
     std::cout<<"Maximum faces: "<<mesh.size_of_faces()<<"\n";
+    mesh.writeMesh(outputFilename);
 
     
 }
@@ -149,12 +127,22 @@ int main(int argc,char** argv)
     
     //Default number of faces limitation
     int maxfaces=std::numeric_limits<int>::max();
+    std::string inputFilename ;
+    std::string outputFilename ;
     
     std::string method;
     
-    while((c=getopt(argc,argv,"at:l:m:f:"))!=EOF)
+    while((c=getopt(argc,argv,"at:l:m:f:o:i:"))!=EOF)
     {
         switch(c){
+                case 'o':
+                outputFilename = std::string(optarg) ;
+                break;
+
+                case 'i':
+                inputFilename = std::string(optarg) ;
+                break;
+
                 case 'a':
                 enableAdaptive=true;
                 break;
@@ -191,21 +179,19 @@ int main(int argc,char** argv)
         usage();
     }
    
-    
-    Window window(&argc,argv,1024,1024);
+
 
     
     if(method == "loop")
     {
         Loop loop;
-        process(loop,window,angle,enableAdaptive,maxlevel,maxfaces);
+        process(loop,angle,enableAdaptive,maxlevel,maxfaces,inputFilename,outputFilename);
     }else if(method == "sqrt3")
     {
         Sqrt_3 sqrt;
-        process(sqrt,window,angle,enableAdaptive,maxlevel,maxfaces);
+        process(sqrt,angle,enableAdaptive,maxlevel,maxfaces,inputFilename,outputFilename);
     }
     
-    window.run();
     
     return 0;
 }

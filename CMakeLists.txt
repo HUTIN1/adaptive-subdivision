@@ -1,31 +1,32 @@
-cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
+
 
 project(adaptiveSubdivision LANGUAGES CXX)
 
-set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
-
-if(UNIX AND NOT APPLE AND CMAKE_COMPILER_IS_GNUCXX)
-	message(STATUS "Using gcc/g++ compiler (Linux)")
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -frounding-math -Wall -Wno-sign-compare -O3 ")
-endif()
-
-if(APPLE)
-	message(STATUS "Using Clang compiler on (Apple)")
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -Wall -Wno-sign-compare -Wno-deprecated-declarations -O3")
-endif()
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 
 
+  
 include(cmake/OpenGL.cmake)
 include(cmake/GLUT.cmake)
-include(cmake/CGAL.cmake)
+# include(cmake/CGAL.cmake)
+find_package(CGAL REQUIRED)
 include(cmake/Eigen3.cmake)
+
+
 
 
 file(GLOB SOURCES "src/*.cpp")
 file(GLOB HEADERS "src/*.h")
 
+message(VTK_DIR="${VTK_DIR}")
+message(CGAL_DIR="${CGAL_DIR}")
+message(LIBRARIES="${LIBRARIES}")
 
-add_executable(demo ${SOURCES} ${HEADERS})
-target_link_libraries(demo ${LIBRARIES})
+add_executable(adaptiveSubdivision ${SOURCES} ${HEADERS})
+target_link_libraries(adaptiveSubdivision PRIVATE ${LIBRARIES} CGAL::CGAL)
+
+
+
 

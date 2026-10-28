@@ -4,12 +4,22 @@
 #define Base_h
 
 #include "Mathematics.hpp"
+#include <CGAL/Simple_cartesian.h>
 #include <CGAL/Polyhedron_3.h>
 #include <CGAL/IO/Polyhedron_iostream.h>
+#include <CGAL/IO/Polyhedron_VRML_2_ostream.h>
+#include <CGAL/IO/Polyhedron_inventor_ostream.h>
+#include <CGAL/Polyhedron_incremental_builder_3.h>
+#include <CGAL/IO/polygon_soup_io.h>
 #include <cmath>
 #include <vector>
 #include <iostream>
 #include <fstream>
+#include <map>
+
+
+// alias de types issus de ta déclaration de Polyhedron
+
 
 template<class Items>
 class Base
@@ -44,6 +54,9 @@ public:
             std::exit(1);
         }
     }
+    void loadMesh(std::string filename);
+    void writeMesh(std::string filename);
+   
     
     void createBuffers(std::vector<double>& vbuffer, std::vector<double>& nbuffer, std::vector<double>& ebuffer);
     
@@ -61,6 +74,112 @@ protected:
 
     Polyhedron mesh;
 };
+
+
+template<class T, class Items>
+class Build_triangle : public CGAL::Modifier_base<T>{
+    typedef typename Base<Items>::Polyhedron        Polyhedron_t;
+    typedef typename Polyhedron_t::HalfedgeDS       HDS;
+    typedef typename Polyhedron_t::Point            Point_t;
+    public :
+        Build_triangle(std::vector<Point_t> *ppoints, std::vector<std::vector<std::size_t>> *ppolygons) {
+            points = ppoints;
+            polygons = ppolygons;
+        }
+
+        void operator()(T& hds){
+            CGAL::Polyhedron_incremental_builder_3<T> builder(hds, true);
+            builder.begin_surface(points->size(), polygons->size());
+
+            // ajouter les sommets
+            for(const auto& p : *points) {
+                builder.add_vertex(p);
+            }
+
+            // ajouter les faces (chaque face est un vecteur de sommets)
+            for(const auto& face : *polygons) {
+                builder.begin_facet();
+                for(std::size_t i : face) {
+                    builder.add_vertex_to_facet(i);
+                }
+                builder.end_facet();
+            }
+
+            builder.end_surface();
+        }
+        std::vector<Point_t> *points;
+        std::vector<std::vector<std::size_t>> *polygons;
+
+};
+
+
+template <class Items>
+void Base<Items>::loadMesh(std::string filename)
+{
+    typedef typename Base<Items>::Polyhedron        Polyhedron_t;
+    typedef typename Polyhedron_t::HalfedgeDS       HDS;
+    typedef typename Polyhedron_t::Point            Point_t;
+
+    // 1) lire PLY en soup de points / faces
+    std::vector<Point_t> points;
+    std::vector<std::vector<std::size_t>> polygons;
+
+    std::cout << "Try to read : " << filename << std::endl;
+
+    if(!CGAL::IO::read_polygon_soup(filename, points, polygons)) {
+        std::cerr << "Erreur: lecture PLY échouée\n";
+        std::exit(1);
+    }
+
+    mesh.clear(); // effacer l’ancien mesh
+
+    // 2) construire Polyhedron avec l’incremental builder
+    Build_triangle<HDS,Items> triangles(&points, &polygons);
+    mesh.delegate(triangles);
+}
+
+
+template <class Items>
+void Base<Items>::writeMesh(std::string filename)
+{
+    typedef typename Base<Items>::Polyhedron      Polyhedron_t;
+    typedef typename Polyhedron_t::Point          Point_t;
+    typedef typename Polyhedron_t::Vertex_const_handle Vhandle_t;
+
+    const Polyhedron_t& P = mesh; // ton membre mesh
+
+    // 1) récupère les points
+    std::vector<Point_t> points;
+    points.reserve(P.size_of_vertices());
+
+    std::map<Vhandle_t, std::size_t> index_of;
+    std::size_t idx = 0;
+    for(auto vit = P.vertices_begin(); vit != P.vertices_end(); ++vit) {
+        index_of[vit] = idx;
+        points.push_back(vit->point());
+        ++idx;
+    }
+
+    // 2) récupère les faces (liste d’indices)
+    std::vector<std::vector<std::size_t>> polygons;
+    polygons.reserve(P.size_of_facets());
+    for(auto fit = P.facets_begin(); fit != P.facets_end(); ++fit) {
+        std::vector<std::size_t> face_indices;
+        auto h = fit->halfedge();
+        do {
+            face_indices.push_back(index_of[h->vertex()]);
+            h = h->next();
+        } while(h != fit->halfedge());
+        polygons.push_back(face_indices);
+    }
+
+    // 3) écris en OBJ
+    if(!CGAL::IO::write_polygon_soup(filename, points, polygons)) {
+        std::cerr << "Erreur : échec de l’écriture OBJ\n";
+        std::exit(1);
+    }
+    std::cout << "Write mesh in this file : " << filename << std::endl;
+}
 
 //Create buffers for rendering
 template<class Items>
