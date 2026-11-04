@@ -1,7 +1,7 @@
 //SHENGYANG WEI     
 
 #include "Window.hpp"
-
+#include <cassert>
 Window* Window::active = nullptr;
 
 
